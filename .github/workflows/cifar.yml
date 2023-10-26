@@ -1,0 +1,29 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: pip3 install -r requirements.txt
+
+    - name: Run CIFAR10 Pipeline in Kubeflow
+      env:
+        KUBEFLOW_ENDPOINT: ${{ secrets.KUBEFLOW_ENDPOINT }}
+        KUBEFLOW_USERNAME: ${{ secrets.KUBEFLOW_USERNAME }}
+        KUBEFLOW_PASSWORD: ${{ secrets.KUBEFLOW_PASSWORD }}
+      run: cd pipeline/cifar && python3 cifa10.py

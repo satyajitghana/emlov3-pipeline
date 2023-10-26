@@ -1,6 +1,8 @@
 import json
 import re
 import requests
+import kfp
+import os
 
 from urllib.parse import urlsplit
 from kfp.onprem import use_k8s_secret
@@ -27,7 +29,8 @@ def get_istio_auth_session(url: str, username: str, password: str) -> dict:
         "redirect_url": None,  # KF redirect URL, if applicable
         "dex_login_url": None,  # Dex login URL (for POST of credentials)
         "is_secured": None,  # True if KF endpoint is secured
-        "session_cookie": None,  # Resulting session cookies in the form "key1=value1; key2=value2"
+        # Resulting session cookies in the form "key1=value1; key2=value2"
+        "session_cookie": None,
     }
 
     # use a persistent session (for cookies)
@@ -108,9 +111,13 @@ def get_istio_auth_session(url: str, username: str, password: str) -> dict:
     return auth_session
 
 
-KUBEFLOW_ENDPOINT = "https://kubeflow.ui.kubeflow.satyajit.theschoolof.ai"
-KUBEFLOW_USERNAME = "user@example.com"
-KUBEFLOW_PASSWORD = "aiwilltakeovertheworld"
+KUBEFLOW_ENDPOINT = os.environ.get(
+    "KUBEFLOW_ENDPOINT", "https://kubeflow.ui.kubeflow.satyajit.theschoolof.ai")
+KUBEFLOW_USERNAME = os.environ.get("KUBEFLOW_USERNAME", "user@example.com")
+KUBEFLOW_PASSWORD = os.environ.get(
+    "KUBEFLOW_PASSWORD", "aiwilltakeovertheworld")
+
+print(f"fetching auth session from {KUBEFLOW_ENDPOINT}")
 
 auth_session = get_istio_auth_session(
     url=KUBEFLOW_ENDPOINT, username=KUBEFLOW_USERNAME, password=KUBEFLOW_PASSWORD
@@ -125,17 +132,22 @@ MINIO_ENDPOINT = "s3.amazonaws.com"
 LOG_BUCKET = "tsai-emlo"
 TENSORBOARD_IMAGE = "public.ecr.aws/pytorch-samples/tboard:latest"
 
+print(f"creating kfp pipeline client")
+
 client = kfp.Client(host=INGRESS_GATEWAY + "/pipeline", cookies=COOKIE)
 
-client.create_experiment(EXPERIMENT)
+# client.create_experiment(EXPERIMENT)
 experiments = client.list_experiments(namespace=NAMESPACE)
 my_experiment = experiments.experiments[0]
 
 
 DEPLOY_NAME = "torchserve"
 MODEL_NAME = "cifar10"
+ISVC_NAME = DEPLOY_NAME+"."+NAMESPACE+"."+"example.com"
+INPUT_REQUEST = "https://raw.githubusercontent.com/kubeflow/pipelines/master/samples/contrib/pytorch-samples/cifar10/input.json"
 
-prepare_tensorboard_op = load_component_from_file("yaml/tensorboard_component.yaml")
+prepare_tensorboard_op = load_component_from_file(
+    "yaml/tensorboard_component.yaml")
 prep_op = load_component_from_file("yaml/preprocess_component.yaml")
 train_op = load_component_from_file("yaml/train_component.yaml")
 deploy_op = load_component_from_file("yaml/kserve_component.yaml")
@@ -146,7 +158,7 @@ minio_op = load_component_from_file("yaml/minio_component.yaml")
 @dsl.pipeline(
     name="Training Cifar10 pipeline", description="Cifar 10 dataset pipeline"
 )
-def pytorch_cifar10( # pylint: disable=too-many-arguments
+def pytorch_cifar10(  # pylint: disable=too-many-arguments
     minio_endpoint=MINIO_ENDPOINT,
     log_bucket=LOG_BUCKET,
     log_dir=f"tensorboard/logs/{dsl.RUN_ID_PLACEHOLDER}",
@@ -228,7 +240,7 @@ def pytorch_cifar10( # pylint: disable=too-many-arguments
 
     prep_task = (
         prep_op().after(prepare_tb_task
-                       ).set_display_name("Preprocess & Transform")
+                        ).set_display_name("Preprocess & Transform")
     )
     confusion_matrix_url = f"s3://{log_bucket}/{confusion_matrix_log_dir}"
     script_args = f"model_name=resnet.pth," \
@@ -250,7 +262,6 @@ def pytorch_cifar10( # pylint: disable=too-many-arguments
         # .set_gpu_limit(1).add_node_selector_constraint('cloud.google.com/gke-accelerator','nvidia-tesla-p4')
     )
 
-
     (
         minio_op(
             bucket_name="tsai-emlo",
@@ -258,7 +269,7 @@ def pytorch_cifar10( # pylint: disable=too-many-arguments
             input_path=train_task.outputs["tensorboard_root"],
             filename="",
             endpoint="s3.amazonaws.com"
-            
+
         ).after(train_task).set_display_name("Tensorboard Events Pusher")
     )
 
@@ -344,7 +355,7 @@ def pytorch_cifar10( # pylint: disable=too-many-arguments
     # Update inferenceservice_yaml for GPU inference
     deploy_task = (
         deploy_op(action="apply", inferenceservice_yaml=isvc_yaml
-                 ).after(minio_mar_upload).set_display_name("Deployer")
+                  ).after(minio_mar_upload).set_display_name("Deployer")
     )
     # Wait here for model to be loaded in torchserve for inference
     sleep_task = sleep_op(60).after(deploy_task).set_display_name("Sleep")
@@ -380,8 +391,16 @@ def pytorch_cifar10( # pylint: disable=too-many-arguments
         )
     )
 
+
+print("compiling pipline to tar.gz")
 compiler.Compiler().compile(pytorch_cifar10, 'pytorch.tar.gz', type_check=True)
 
-run = client.run_pipeline(my_experiment.id, 'pytorch-cifar10', 'pytorch.tar.gz')
+print("running pipeline")
+run = client.run_pipeline(
+    my_experiment.id, 'pytorch-cifar10', 'pytorch.tar.gz')
 
-print(f"running pipeline: ", run)
+print(f"pipeline run created: ", run)
+
+print("waiting for run to finish...")
+client.wait_for_run_completion(run.id, 60*60)  # wait for 1 hour to finish
+print("run finished")
