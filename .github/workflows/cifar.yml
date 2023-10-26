@@ -1,4 +1,4 @@
-name: build
+name: Run CIFAR Pipeline
 
 on:
   push:
@@ -26,4 +26,4 @@ jobs:
         KUBEFLOW_ENDPOINT: ${{ secrets.KUBEFLOW_ENDPOINT }}
         KUBEFLOW_USERNAME: ${{ secrets.KUBEFLOW_USERNAME }}
         KUBEFLOW_PASSWORD: ${{ secrets.KUBEFLOW_PASSWORD }}
-      run: cd pipeline/cifar && python3 cifa10.py
+      run: cd pipeline/cifar && python3 cifar10.py
