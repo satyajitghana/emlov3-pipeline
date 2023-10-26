@@ -1,0 +1,75 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+iam:
+  withOIDC: true
+
+metadata:
+  name: basic-cluster
+  region: ap-south-1
+  version: "1.25"
+
+managedNodeGroups:
+  - name: ng-dedicated-1
+    instanceType: t3a.medium
+    desiredCapacity: 1
+    ssh:
+      allow: true # will use ~/.ssh/id_rsa.pub as the default ssh key
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+        awsLoadBalancerController: true
+        certManager: true
+        externalDNS: true
+        ebs: true
+        efs: true
+        cloudWatch: true
+  - name: ng-spot-1
+    instanceType: t3a.medium
+    desiredCapacity: 4
+    ssh:
+      allow: true # will use ~/.ssh/id_rsa.pub as the default ssh key
+    spot: true
+    labels:
+      role: spot
+    propagateASGTags: true
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+        awsLoadBalancerController: true
+        certManager: true
+        externalDNS: true
+        ebs: true
+        efs: true
+        cloudWatch: true
+  - name: ng-dedicated-model
+    instanceType: t3a.2xlarge
+    desiredCapacity: 3
+    ssh:
+      allow: true # will use ~/.ssh/id_rsa.pub as the default ssh key
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+        awsLoadBalancerController: true
+        certManager: true
+        externalDNS: true
+        ebs: true
+        efs: true
+        cloudWatch: true
+  # - name: ng-gpu-spot-1
+  #   instanceType: g4dn.xlarge
+  #   desiredCapacity: 1
+  #   ssh:
+  #     allow: true
+  #   spot: true
+  #   labels:
+  #     role: spot
+  #   propagateASGTags: true
+  #   iam:
+  #     withAddonPolicies:
+  #       autoScaler: true
+  #       awsLoadBalancerController: true
+  #       certManager: true
+  #       externalDNS: true
+  #       ebs: true
+  #       efs: true
+  #       cloudWatch: true
