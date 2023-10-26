@@ -21,6 +21,9 @@ jobs:
     - name: Install dependencies
       run: pip3 install -r requirements.txt
 
+    - name: Fix Deps
+      run: pip3 install urllib3==1.26.15 requests-toolbelt==0.10.1
+
     - name: Run CIFAR10 Pipeline in Kubeflow
       env:
         KUBEFLOW_ENDPOINT: ${{ secrets.KUBEFLOW_ENDPOINT }}
