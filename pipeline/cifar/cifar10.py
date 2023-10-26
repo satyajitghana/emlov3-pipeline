@@ -397,7 +397,7 @@ compiler.Compiler().compile(pytorch_cifar10, 'pytorch.tar.gz', type_check=True)
 
 print("running pipeline")
 run = client.run_pipeline(
-    my_experiment.id, 'pytorch-cifar10', 'pytorch.tar.gz')
+    my_experiment.id, 'pytorch-cifar10-ci-run', 'pytorch.tar.gz')
 
 print(f"pipeline run created: ", run)
 
